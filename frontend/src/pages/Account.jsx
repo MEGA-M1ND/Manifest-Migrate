@@ -12,6 +12,7 @@ export default function Account() {
   const [history, setHistory] = useState([]);
   const [confirming, setConfirming] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [resendState, setResendState] = useState("idle"); // idle | sending | sent | err
 
   useEffect(() => {
     refresh();
@@ -26,12 +27,48 @@ export default function Account() {
     nav("/", { replace: true });
   };
 
+  const resendVerify = async () => {
+    setResendState("sending");
+    try {
+      await api.post("/auth/resend-verification");
+      setResendState("sent");
+    } catch {
+      setResendState("err");
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header variant="app" />
       <main className="flex-1 max-w-3xl mx-auto w-full px-5 py-10">
         <div className="mf-eyebrow">Crew · Account</div>
         <h1 className="font-display font-bold text-3xl mt-2 tracking-tight">Account</h1>
+
+        {!user.email_verified && user.auth_provider === "password" && (
+          <div className="mt-6 border-l-4 border-accent bg-white p-4 flex items-start gap-4 flex-wrap" data-testid="verify-banner">
+            <div className="flex-1 min-w-[200px]">
+              <div className="mf-eyebrow">Pending customs check</div>
+              <div className="font-display font-bold mt-1">Verify your email</div>
+              <p className="text-sm text-ink/70 mt-1">
+                We sent a verification link to <span className="font-data">{user.email}</span>. Click it to clear this banner.
+              </p>
+            </div>
+            <button
+              onClick={resendVerify}
+              disabled={resendState === "sending" || resendState === "sent"}
+              className="mf-btn mf-btn-secondary"
+              data-testid="verify-resend-btn"
+            >
+              {resendState === "sending"
+                ? "Sending…"
+                : resendState === "sent"
+                ? "Sent ✓"
+                : resendState === "err"
+                ? "Try again"
+                : "Resend email"}
+            </button>
+          </div>
+        )}
 
         <section className="mf-card mt-6">
           <div className="absolute top-3 right-4 font-data text-[10px] uppercase tracking-widest text-ink/50">Profile · 01</div>

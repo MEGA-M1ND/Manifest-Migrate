@@ -44,6 +44,9 @@ export default function Header({ variant = "marketing" }) {
           {user && (
             <>
               {planPill}
+              {user.is_admin && (
+                <Link to="/admin" data-testid="header-admin-link" className="hover:text-accent transition-colors">Admin</Link>
+              )}
               {user.plan !== "full" && loc.pathname !== "/app" && (
                 <Link to="/app" data-testid="header-go-app" className="hover:text-accent transition-colors">Open tool</Link>
               )}

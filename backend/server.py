@@ -32,6 +32,13 @@ from emergentintegrations.payments.stripe.checkout import (
     CheckoutSessionRequest,
 )
 
+from emails import (
+    render_password_reset_email,
+    render_purchase_email,
+    render_verification_email,
+    send_email,
+)
+
 
 # ----------- bootstrap -----------
 ROOT_DIR = Path(__file__).parent
@@ -47,6 +54,9 @@ JWT_ALG = "HS256"
 JWT_TTL_DAYS = 14
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "sk_test_emergent")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "vpkarthik97@gmail.com").lower()
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "").rstrip("/")
+VERIFICATION_TTL_HOURS = 72
+RESET_TTL_HOURS = 1
 
 PLAN_FREE = "free"
 PLAN_FULL = "full"
@@ -106,6 +116,23 @@ class CheckoutReq(BaseModel):
     origin_url: str
 
 
+class VerifyEmailReq(BaseModel):
+    token: str
+
+
+class ResendVerificationReq(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordReq(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordReq(BaseModel):
+    token: str
+    password: str = Field(min_length=8, max_length=200)
+
+
 # ----------- helpers -----------
 def hash_pw(pw: str) -> str:
     return bcrypt.hashpw(pw.encode(), bcrypt.gensalt(rounds=12)).decode()
@@ -161,9 +188,48 @@ async def current_user(
     return user
 
 
+async def require_admin(user: dict = Depends(current_user)) -> dict:
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    return user
+
+
+def _frontend_url(request: Request) -> str:
+    if FRONTEND_URL:
+        return FRONTEND_URL
+    # Derive from request's Origin/Referer as best-effort fallback
+    origin = request.headers.get("origin") or request.headers.get("referer") or ""
+    return origin.rstrip("/")
+
+
+def _new_token() -> str:
+    return uuid.uuid4().hex + uuid.uuid4().hex
+
+
+async def _issue_verification_email(user: dict, request: Request):
+    if user.get("email_verified"):
+        return
+    token = _new_token()
+    expires = datetime.now(timezone.utc) + timedelta(hours=VERIFICATION_TTL_HOURS)
+    await db.email_tokens.insert_one(
+        {
+            "token": token,
+            "user_id": user["user_id"],
+            "kind": "verify",
+            "expires_at": expires.isoformat(),
+            "used": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    base = _frontend_url(request)
+    verify_url = f"{base}/verify-email?token={token}"
+    subject, html = render_verification_email(user.get("name") or "", verify_url)
+    await send_email(user["email"], subject, html)
+
+
 # ----------- auth endpoints -----------
 @api.post("/auth/signup")
-async def signup(req: SignupReq):
+async def signup(req: SignupReq, request: Request):
     email = req.email.lower()
     if await get_user_by_email(email):
         raise HTTPException(status_code=409, detail="Account already exists")
@@ -178,6 +244,8 @@ async def signup(req: SignupReq):
     doc = user.model_dump()
     doc["password_hash"] = hash_pw(req.password)
     await db.users.insert_one(doc)
+    # fire-and-forget verification email
+    await _issue_verification_email(doc, request)
     return {"token": make_jwt(user_id), "user": to_public_user(doc)}
 
 
@@ -226,6 +294,68 @@ async def google_callback(req: GoogleCallbackReq):
 @api.get("/auth/me")
 async def me(user: dict = Depends(current_user)):
     return {"user": to_public_user(user)}
+
+
+@api.post("/auth/verify-email")
+async def verify_email(req: VerifyEmailReq):
+    tok = await db.email_tokens.find_one({"token": req.token, "kind": "verify"}, {"_id": 0})
+    if not tok:
+        raise HTTPException(status_code=400, detail="Invalid or already-used link")
+    if tok.get("used"):
+        raise HTTPException(status_code=400, detail="This link has already been used")
+    if datetime.fromisoformat(tok["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="This link has expired — request a new one")
+    await db.users.update_one({"user_id": tok["user_id"]}, {"$set": {"email_verified": True}})
+    await db.email_tokens.update_one({"token": req.token}, {"$set": {"used": True}})
+    user = await get_user_by_id(tok["user_id"])
+    return {"ok": True, "user": to_public_user(user) if user else None}
+
+
+@api.post("/auth/resend-verification")
+async def resend_verification(request: Request, user: dict = Depends(current_user)):
+    if user.get("email_verified"):
+        return {"ok": True, "already_verified": True}
+    await _issue_verification_email(user, request)
+    return {"ok": True}
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordReq, request: Request):
+    """Always return ok=true to avoid leaking which emails are registered."""
+    user = await get_user_by_email(req.email)
+    if user and user.get("auth_provider") == "password":
+        token = _new_token()
+        expires = datetime.now(timezone.utc) + timedelta(hours=RESET_TTL_HOURS)
+        await db.email_tokens.insert_one(
+            {
+                "token": token,
+                "user_id": user["user_id"],
+                "kind": "reset",
+                "expires_at": expires.isoformat(),
+                "used": False,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        base = _frontend_url(request)
+        reset_url = f"{base}/reset-password?token={token}"
+        subject, html = render_password_reset_email(user.get("name") or "", reset_url)
+        await send_email(user["email"], subject, html)
+    return {"ok": True}
+
+
+@api.post("/auth/reset-password")
+async def reset_password(req: ResetPasswordReq):
+    tok = await db.email_tokens.find_one({"token": req.token, "kind": "reset"}, {"_id": 0})
+    if not tok or tok.get("used"):
+        raise HTTPException(status_code=400, detail="Invalid or already-used link")
+    if datetime.fromisoformat(tok["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="This link has expired — request a new one")
+    await db.users.update_one(
+        {"user_id": tok["user_id"]},
+        {"$set": {"password_hash": hash_pw(req.password)}},
+    )
+    await db.email_tokens.update_one({"token": req.token}, {"$set": {"used": True}})
+    return {"ok": True}
 
 
 @api.delete("/auth/account")
@@ -316,6 +446,19 @@ async def _apply_paid(session_id: str, user_id: Optional[str]):
         {"user_id": target_user_id},
         {"$set": {"plan": PLAN_FULL, "plan_purchased_at": now}},
     )
+    # Purchase confirmation email — never crash _apply_paid if email fails
+    try:
+        user = await get_user_by_id(target_user_id)
+        if user:
+            subject, html = render_purchase_email(
+                user.get("name") or "",
+                float(txn.get("amount") or FULL_PLAN_PRICE_USD),
+                txn.get("currency") or "usd",
+                session_id,
+            )
+            await send_email(user["email"], subject, html)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("purchase email failed for session %s: %s", session_id, e)
 
 
 @api.get("/payments/status/{session_id}")
@@ -355,6 +498,59 @@ async def payment_history(user: dict = Depends(current_user)):
         {"user_id": user["user_id"]}, {"_id": 0}
     ).sort("created_at", -1).to_list(50)
     return {"items": items}
+
+
+# ----------- admin -----------
+@api.get("/admin/stats")
+async def admin_stats(_: dict = Depends(require_admin)):
+    total = await db.users.count_documents({})
+    paid = await db.users.count_documents({"plan": PLAN_FULL})
+    free = total - paid
+    revenue_cur = db.payment_transactions.aggregate(
+        [
+            {"$match": {"payment_status": "paid"}},
+            {"$group": {"_id": None, "sum": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        ]
+    )
+    rev = await revenue_cur.to_list(1)
+    revenue = rev[0] if rev else {"sum": 0, "count": 0}
+
+    # daily signups for the last 30 days
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=29)).isoformat()
+    users = await db.users.find(
+        {"created_at": {"$gte": cutoff}}, {"_id": 0, "created_at": 1, "plan": 1}
+    ).to_list(5000)
+    by_day: dict[str, dict] = {}
+    for u in users:
+        d = (u.get("created_at") or "")[:10]
+        if not d:
+            continue
+        slot = by_day.setdefault(d, {"day": d, "signups": 0, "paid": 0})
+        slot["signups"] += 1
+        if u.get("plan") == PLAN_FULL:
+            slot["paid"] += 1
+    # fill in missing days
+    series = []
+    for i in range(30):
+        d = (datetime.now(timezone.utc) - timedelta(days=29 - i)).date().isoformat()
+        series.append(by_day.get(d, {"day": d, "signups": 0, "paid": 0}))
+
+    recent_revenue = await db.payment_transactions.find(
+        {"payment_status": "paid"}, {"_id": 0}
+    ).sort("paid_at", -1).limit(10).to_list(10)
+
+    return {
+        "users": {"total": total, "free": free, "paid": paid},
+        "revenue": {"total_usd": round(float(revenue.get("sum") or 0), 2), "count": revenue.get("count") or 0},
+        "signups_30d": series,
+        "recent_payments": recent_revenue,
+    }
+
+
+@api.get("/admin/users")
+async def admin_users(_: dict = Depends(require_admin), limit: int = 100):
+    items = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return {"items": items, "count": len(items)}
 
 
 # ----------- meta -----------

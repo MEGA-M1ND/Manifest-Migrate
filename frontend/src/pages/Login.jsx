@@ -68,6 +68,9 @@ export default function Login() {
             <button disabled={busy} className="mf-btn w-full" data-testid="login-submit-btn">
               {busy ? "Verifying…" : "Log in"}
             </button>
+            <Link to="/forgot-password" className="block text-center text-sm text-accent underline mt-2" data-testid="login-forgot-link">
+              Forgot your password?
+            </Link>
           </form>
           <div className="flex items-center gap-3 my-5">
             <hr className="mf-divider flex-1" />

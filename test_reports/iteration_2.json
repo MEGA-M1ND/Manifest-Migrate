@@ -1,0 +1,30 @@
+{
+  "summary": "Phase 2 testing complete. Backend: 31/31 pytest cases pass (12 new Phase-2 tests covering verify-email happy/invalid/reuse paths, resend-verification (auth + already_verified), forgot-password anti-enumeration + Mongo token insert, reset-password success + new-login + token-reuse rejection, admin gating (403 for non-admin, 200 + correct shape for admin), admin/users hiding password_hash, signup-resilience no-5xx). Frontend: /forgot-password renders and shows forgot-sent card; /reset-password?token=... shows two pw inputs + mismatch error + invalid-token error; /verify-email?token=bad shows 'Couldn't verify — invalid or already-used link'; login page has login-forgot-link → /forgot-password; Account verify-banner + verify-resend-btn work and button text flips to 'Sent ✓'; /admin redirects non-admin to /app; admin login sees Admin header link, /admin loads KPI cards (kpi-total-users testid added), 30-day signups SVG bar chart, recent payments table, admin-users-table with 10 entries. Phase 1 regression intact.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminDashboard.jsx KPI subcomponent", "issue": "KPI() destructured only {label,value,sub} and never forwarded data-testid to the root div, so kpi-total-users testid was missing from the DOM. Spec required it. Fixed in this iteration.", "selector": "[data-testid=\"kpi-total-users\"]", "priority": "LOW (testability)"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin dashboard", "issues": ["Other KPI cards (Free/Paid/Revenue) and the 30-day bar chart could also use data-testid attributes for future regression. Not blocking."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:_issue_verification_email is awaited inline inside POST /auth/signup. Resend SDK call is offloaded to asyncio.to_thread (good), but if Resend ever hangs >30s it will stall signup. Consider asyncio.create_task to truly fire-and-forget, or shorten the resend HTTP timeout.",
+    "server.py:/auth/forgot-password — when user.auth_provider=='google' we silently skip token creation. That's fine for anti-enumeration on the API, but the UI offers no hint; google users who try reset will get a generic 'Dispatched' card and never receive anything. Consider a small disclaimer on /forgot-password.",
+    "server.py:/admin/stats signups_30d uses cutoff as ISO-string comparison against the stringified created_at field. Works because ISO-8601 sorts lexically, but a created_at saved without timezone (older accounts) could silently drop out. Consider migrating created_at to a real BSON Date.",
+    "AdminDashboard.jsx — only one KPI carries data-testid; consider also kpi-free/paid/revenue and chart-signups-30d for richer e2e.",
+    "emails.py — send_email swallows all exceptions including programming errors (KeyError in template). That's intentional but worth a sentry/metric counter when this goes to prod."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py", "/app/frontend/src/pages/AdminDashboard.jsx"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Admin vpkarthik97@gmail.com / ManifestAdmin!23 already existed and authenticated successfully (is_admin=true confirmed via /auth/me). Random qa_*/TEST_* emails @manifestqa.io were created on the fly. Phase-1 testers from /app/memory/test_credentials.md were not used.",
+  "seed_data_creation": "A handful of TEST_*@manifestqa.io accounts created during pytest. The pytest cleanup class deletes the main fixture account but the resilience-test accounts remain (used to exercise 'signup does not 500' and reset-password flows). Currently 10 users in DB visible from admin dashboard.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Use `pytest /app/backend/tests/backend_test.py -v` — all 31 pass. backend_test.py uses pymongo direct read of db.email_tokens (MONGO_URL+DB_NAME from env) to fetch verify/reset tokens since Resend sandbox cannot deliver to test emails. Admin login works with credentials from /app/memory/test_credentials.md. Phase-2 frontend testids verified: forgot-sent, login-forgot-link, verify-banner, verify-resend-btn, header-admin-link, kpi-total-users, admin-users-table, admin-error. Stripe real-payment path still NOT exercised (only session creation). The webhook bad-sig test still produces a noisy KeyError traceback in backend.err.log — that is from emergentintegrations.StripeCheckout.handle_webhook raising on the parsed-but-typeless body; the route correctly converts it to a 400.",
+  "rca of the issue": "Single low-priority bug found: AdminDashboard's KPI() helper component didn't spread/forward data-testid → only label/value/sub were destructured. Result: the spec-required kpi-total-users testid was absent from rendered DOM, even though visually the card existed. Fixed by adding `'data-testid': testId` to the destructure and passing it to the root div."
+}
