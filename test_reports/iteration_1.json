@@ -1,0 +1,28 @@
+{
+  "summary": "First iteration end-to-end test of Manifest. Backend: 13/13 pytest cases passed covering meta, auth (signup/login/me/duplicate/wrong-pw/no-token), usage bump (+verify), payments checkout, payments status (no-crash), webhook bad-signature 400, account deletion. Frontend: landing renders hero/pricing/footer; /signup, /login, /app, /account, /privacy, /terms, /auth/callback all load; /app & /account redirect unauthenticated to /login; AuthCallback without session_id redirects to /login; signup→/app flow works with plan-pill-free; dropzone + file-input accept sample export; manifest section renders with selection note; pack button enables after group selection; privacy guarantee verified — during a full pack flow ONLY `POST /api/usage/bump` with `{conversations:1,projects:1}` was sent, no SECRET_TITLE_TOKEN_XYZ / SECRET_BODY_TOKEN_ABC anywhere in network traffic; UpgradeModal opens via unlock-link and Buy button POSTs /api/payments/checkout; Account page shows email/plan/usage and delete-confirm flow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AppTool dropzone behavior", "issues": ["After file upload group checkboxes default to UNCHECKED so the selection-note always starts at '0 conversations selected' and the Pack button stays disabled until the user manually ticks a group. This is technically the spec ('Untick anything you don't want to bring along'), but the wording implies items are pre-selected. Consider defaulting groups to checked=true, or updating the helper text. Not a bug; UX note."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:267 — success_url uses `?upgraded=1&session_id={CHECKOUT_SESSION_ID}` literal placeholder; verify StripeCheckout helper interpolates this correctly (Stripe expects `{CHECKOUT_SESSION_ID}` token but emergentintegrations may require a different convention). Could break the post-payment polling on /app.",
+    "server.py:339 — webhook uses a fresh StripeCheckout(webhook_url='') for verification. If the lib requires the same webhook_url that was used during session creation for signature verification, this could silently reject valid signatures. Behavior with a bad signature correctly returns 400 in our test, but real webhook verification path is untested.",
+    "AppTool.jsx — usage/bump is awaited inside a try/catch that swallows errors silently; if the API is down, the user sees a successful pack but the counters never increment. Consider surfacing a soft warning.",
+    "AppTool.jsx:59 — useEffect dep array disables exhaustive-deps; if user lands on /app with multiple URL params changes it won't re-poll. Acceptable for first iteration.",
+    "UpgradeModal.jsx — no max retry / loading-spinner reset if window.location.href fails (e.g., when Stripe URL is invalid). The `loading=true` stays stuck. Minor."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py", "/app/_ref/sample_export.json"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Random emails @manifestqa.io created on the fly via /api/auth/signup; one test user qa2_*@manifestqa.io was left in the DB after the privacy/pack test. Pre-seeded testers in /app/memory/test_credentials.md were not used.",
+  "seed_data_creation": "Created /app/_ref/sample_export.json (1 conversation 'SECRET_TITLE_TOKEN_XYZ' with body 'SECRET_BODY_TOKEN_ABC') as instructed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All backend endpoints pass via /app/backend/tests/backend_test.py (use `pytest backend/tests/backend_test.py -v`). Frontend flows confirmed including the critical privacy guarantee. Real Stripe payment was NOT completed; only checkout-session creation was exercised. Google OAuth flow not tested (requires real Google identity). The Stripe success_url-placeholder caveat is the only thing that may need a manual end-to-end payment test before production.",
+  "rca of the issue": "n/a — no bugs found"
+}
