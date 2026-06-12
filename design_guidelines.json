@@ -1,0 +1,99 @@
+{
+  "theme_and_archetype": {
+    "theme": "LIGHT",
+    "archetype": "4 (Swiss & High-Contrast)",
+    "description": "Cargo Manifest / Freight Document / Shipping Bill of Lading aesthetic. Sharp geometry, mono typography, ruled lines, and customs stamps to feel like a physical, secure shipping document.",
+    "emotional_tone": "Secure, official, privacy-first, industrial, reliable."
+  },
+  "colors": {
+    "config": {
+      "ink": "#14213D",
+      "accent": "#E8590C",
+      "stamp": "#1F7A4D",
+      "paper": "#E9EDF1",
+      "card": "#FFFFFF",
+      "line": "#C8D1DA"
+    },
+    "usage": {
+      "primary_text": "text-[#14213D]",
+      "secondary_text": "text-[#14213D]/70",
+      "background": "bg-[#E9EDF1]",
+      "surface": "bg-[#FFFFFF]",
+      "borders": "border-[#14213D]",
+      "cta": "bg-[#E8590C] text-white",
+      "success_stamp": "text-[#1F7A4D] border-[#1F7A4D]"
+    }
+  },
+  "typography": {
+    "font_families": {
+      "display": "Space Grotesk",
+      "data": "IBM Plex Mono",
+      "body": "Inter"
+    },
+    "rules": {
+      "h1": "font-display text-4xl sm:text-5xl lg:text-6xl tracking-tighter text-[#14213D] font-bold",
+      "h2": "font-display text-2xl sm:text-3xl lg:text-4xl tracking-tight text-[#14213D] font-semibold",
+      "h3": "font-display text-xl sm:text-2xl tracking-tight text-[#14213D]",
+      "eyebrow_labels": "font-data text-xs uppercase tracking-[0.2em] text-[#14213D] font-semibold",
+      "data_values": "font-data text-sm tracking-tight text-[#14213D]",
+      "body": "font-body text-base text-[#14213D]/80 leading-relaxed"
+    }
+  },
+  "backgrounds": {
+    "ruled_lines": "Add to main container: `bg-[linear-gradient(transparent_31px,#C8D1DA_32px)] bg-[size:100%_32px] bg-[#E9EDF1]` to simulate a notebook/manifest paper."
+  },
+  "layout_and_spacing": {
+    "philosophy": "Grid-based, rigid, industrial. Clear dividing lines between sections, no soft shadows.",
+    "borders": "1px solid border-[#14213D] everywhere. Cards should have no border radius (`rounded-none`).",
+    "shadows": "Hard offset shadows: `shadow-[4px_4px_0px_0px_#14213D]` for cards, buttons, modals."
+  },
+  "components": {
+    "button_primary": "bg-[#14213D] text-white font-data uppercase tracking-widest text-sm px-6 py-3 border border-[#14213D] hover:bg-[#E8590C] hover:border-[#E8590C] transition-colors rounded-none shadow-[2px_2px_0px_0px_#14213D] hover:shadow-[4px_4px_0px_0px_#E8590C] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none",
+    "button_secondary": "bg-[#FFFFFF] text-[#14213D] font-data uppercase tracking-widest text-sm px-6 py-3 border border-[#14213D] hover:bg-[#E9EDF1] transition-colors rounded-none shadow-[2px_2px_0px_0px_#14213D] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none",
+    "card": "bg-[#FFFFFF] border border-[#14213D] rounded-none p-6 md:p-8 relative shadow-[4px_4px_0px_0px_#14213D]",
+    "card_manifest_header": "Every card must have 'Manifest No. 00X' printed in the top right using `font-data text-xs text-[#14213D]/50`.",
+    "customs_stamp": "A div with `border-2 border-[#1F7A4D] text-[#1F7A4D] font-data uppercase tracking-widest px-3 py-1 inline-block rotate-[-12deg] opacity-90 font-bold rounded-sm`. Use for '★ CLEARED FOR IMPORT' or 'PRIVACY VERIFIED'.",
+    "inputs": "bg-transparent border-b-2 border-[#14213D] border-t-0 border-l-0 border-r-0 rounded-none px-0 py-2 font-data focus:ring-0 focus:border-[#E8590C] transition-colors",
+    "table_list": "List of files/conversations must look like a shipping ledger. Use `border-b border-[#C8D1DA]` for rows, monospace for sizes/dates, and checkboxes with sharp square borders."
+  },
+  "motion": {
+    "rules": "No bouncy/spring physics. Use fast, mechanical transitions (`duration-150 ease-linear`). Snappy and deterministic like hardware.",
+    "page_load": "Fade in with a slight vertical slide (10px) using framer-motion `ease: 'circOut'`."
+  },
+  "icons_and_assets": {
+    "library": "@phosphor-icons/react",
+    "style": "Regular or Bold weights, never Duotone or Fill. Industrial, literal icons (Package, FileText, CheckSquare, Stamp, ShieldCheck).",
+    "images": [
+      {
+        "url": "https://images.pexels.com/photos/27130409/pexels-photo-27130409.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Stacked shipping containers. Use as a subtle, low-opacity background for the hero section or 'Full Plan' upgrade modal, with a heavy #14213D overlay to maintain text readability.",
+        "category": "hero_background"
+      }
+    ]
+  },
+  "pages_and_flows": {
+    "landing_page": {
+      "hero": "H1 strictly left-aligned. A prominent 'PRIVACY VERIFIED' customs stamp positioned absolutely over the top right of the hero text block. Prominent primary CTA 'Start Migration Tool'.",
+      "how_it_works": "3-column grid (`grid-cols-1 md:grid-cols-3`). Each step numbered sequentially '01', '02', '03' in massive `text-6xl font-data text-[#14213D]/20`. Borders between columns on desktop.",
+      "pricing": "Two side-by-side cards. The 'Full Plan' card has an `#E8590C` border-top-4 and an 'APPROVED' customs stamp.",
+      "footer": "Massive top border `border-t-4 border-[#14213D]`. Heavy monospace branding."
+    },
+    "app_tool": {
+      "dropzone": "Dashed border (`border-2 border-dashed border-[#14213D]/50 bg-[#E9EDF1] hover:border-[#E8590C] hover:bg-[#FFFFFF]`) taking up the main view. Icon: Phosphor 'FileArchive' size 64.",
+      "manifest_review": "Ledger-style table. Columns for 'Project Name' (editable input), 'Conversations', 'Size', 'Action'. Heavy use of IBM Plex Mono. Rows have hover effects.",
+      "header": "Sticky nav. Left: Logo. Right: Plan Pill (Free/Full) mapped to `bg-[#14213D] text-white` vs `bg-[#E8590C] text-white`. 'Upgrade' button uses secondary button styling if free."
+    }
+  },
+  "accessibility_and_testing": {
+    "contrast": "All text colors specified strictly meet WCAG AAA contrast due to dark ink on light paper.",
+    "testing_attributes": "All interactive elements MUST include `data-testid` (e.g., `data-testid=\"start-migration-button\"`, `data-testid=\"dropzone-input\"`)."
+  },
+  "instructions_to_main_agent": [
+    "Install Google Fonts in index.html or import in CSS: Space Grotesk, IBM Plex Mono, Inter.",
+    "Configure Tailwind spacing and colors to match the variables provided (ink, accent, stamp, paper, card, line).",
+    "Use pure HTML+Tailwind for landing page structural components; use Shadcn strictly for interactive logic (Dialogs, Checkboxes).",
+    "Shadcn customization: Strip all `rounded-md` and soft shadows from default Shadcn styles. Replace with `rounded-none`, `border-[#14213D]`, and hard `#14213D` offset shadows.",
+    "Implement the `bg-ruled-lines` utility class in index.css as specified.",
+    "Ensure the privacy promise is visually prominent near all file upload/dropzone areas."
+  ]
+}

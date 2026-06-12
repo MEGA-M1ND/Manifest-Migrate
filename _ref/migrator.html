@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manifest — ChatGPT → Claude Migration Kit</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #E9EDF1;
+    --card: #FFFFFF;
+    --ink: #14213D;
+    --ink-soft: #4A5568;
+    --line: #C8D1DA;
+    --accent: #E8590C;       /* freight orange */
+    --accent-soft: #FFF0E6;
+    --stamp: #1F7A4D;        /* customs green */
+    --mono: 'IBM Plex Mono', monospace;
+    --body: 'Inter', system-ui, sans-serif;
+    --display: 'Space Grotesk', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { background: var(--paper); }
+  body {
+    font-family: var(--body);
+    color: var(--ink);
+    min-height: 100vh;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(20,33,61,0.035) 39px, rgba(20,33,61,0.035) 40px),
+      var(--paper);
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 40px 20px 90px; }
+
+  /* ---------- Header ---------- */
+  header { border-bottom: 3px solid var(--ink); padding-bottom: 22px; margin-bottom: 34px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 10px;
+  }
+  h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5.4vw, 46px); line-height: 1.04; letter-spacing: -0.015em; }
+  h1 .arrow { color: var(--accent); }
+  .sub { margin-top: 12px; color: var(--ink-soft); font-size: 15px; max-width: 60ch; line-height: 1.55; }
+  .privacy-tag {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 16px;
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    border: 1.5px solid var(--stamp); color: var(--stamp);
+    padding: 5px 11px; border-radius: 3px;
+  }
+  .privacy-tag .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--stamp); }
+
+  /* ---------- Steps rail ---------- */
+  .rail { display: flex; gap: 0; margin-bottom: 26px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .rail span { padding: 7px 14px; border: 1px solid var(--line); border-right: none; background: var(--card); color: var(--ink-soft); }
+  .rail span:last-child { border-right: 1px solid var(--line); }
+  .rail span.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  /* ---------- Cards ---------- */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 26px; margin-bottom: 22px; }
+  .card h2 { font-family: var(--display); font-size: 19px; font-weight: 700; margin-bottom: 5px; }
+  .card .hint { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 16px; line-height: 1.5; }
+
+  /* ---------- Dropzone ---------- */
+  .dropzone {
+    border: 2px dashed var(--line); border-radius: 6px; padding: 44px 22px;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: var(--accent-soft); }
+  .dropzone .big { font-family: var(--display); font-weight: 700; font-size: 17px; margin-bottom: 6px; }
+  .dropzone .small { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
+  .dropzone:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  #fileInput { display: none; }
+  .howto { margin-top: 14px; font-size: 13px; color: var(--ink-soft); line-height: 1.6; }
+  .howto code { font-family: var(--mono); font-size: 12px; background: var(--paper); padding: 1px 5px; border-radius: 3px; }
+
+  .status { font-family: var(--mono); font-size: 13px; margin-top: 14px; display: none; }
+  .status.err { color: #B02A1B; display: block; }
+  .status.ok { color: var(--stamp); display: block; }
+  .status.busy { color: var(--ink-soft); display: block; }
+
+  /* ---------- Manifest ---------- */
+  #manifest { display: none; position: relative; }
+  .manifest-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 4px; }
+  .manifest-head h2 { font-family: var(--display); font-size: 20px; font-weight: 700; }
+  .manifest-meta { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
+
+  .group { border-bottom: 1px solid var(--line); }
+  .group-row { display: flex; align-items: center; gap: 12px; padding: 13px 4px; }
+  .group-row input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
+  .group-name {
+    font-family: var(--display); font-weight: 700; font-size: 15.5px;
+    border: none; background: transparent; color: var(--ink);
+    flex: 1; min-width: 120px; padding: 4px 6px; border-radius: 3px;
+  }
+  .group-name:hover { background: var(--paper); }
+  .group-name:focus { outline: 2px solid var(--accent); background: #fff; }
+  .badge { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-soft); white-space: nowrap; }
+  .badge.proj { border-color: var(--accent); color: var(--accent); }
+  .badge.gpt { border-color: #5A67D8; color: #5A67D8; }
+  .count { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; }
+  .expand-btn { font-family: var(--mono); font-size: 12px; background: none; border: 1px solid var(--line); border-radius: 3px; padding: 4px 9px; cursor: pointer; color: var(--ink-soft); }
+  .expand-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .convo-list { display: none; padding: 0 4px 12px 46px; }
+  .convo-list.open { display: block; }
+  .convo-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13.5px; }
+  .convo-row input { accent-color: var(--accent); cursor: pointer; }
+  .convo-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .convo-date { font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; }
+
+  /* ---------- Options ---------- */
+  .options { display: flex; flex-wrap: wrap; gap: 22px; padding: 18px 4px 6px; }
+  .opt { font-size: 13.5px; }
+  .opt .opt-label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-soft); margin-bottom: 7px; }
+  .opt label { display: flex; align-items: center; gap: 7px; padding: 3px 0; cursor: pointer; }
+  .opt input { accent-color: var(--accent); }
+
+  /* ---------- Actions ---------- */
+  .actions { display: flex; align-items: center; gap: 16px; margin-top: 18px; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--display); font-weight: 700; font-size: 15px;
+    background: var(--ink); color: #fff; border: none; border-radius: 4px;
+    padding: 13px 26px; cursor: pointer; transition: background .15s;
+  }
+  .btn:hover { background: var(--accent); }
+  .btn:disabled { background: var(--line); cursor: not-allowed; }
+  .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .selection-note { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft); }
+
+  /* ---------- Stamp ---------- */
+  .stamp {
+    position: absolute; top: 14px; right: 18px;
+    font-family: var(--mono); font-weight: 600; font-size: 14px; letter-spacing: 0.14em;
+    color: var(--stamp); border: 3px solid var(--stamp); border-radius: 6px;
+    padding: 8px 14px; transform: rotate(-9deg);
+    text-transform: uppercase; opacity: 0; pointer-events: none;
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><filter id='n'><feTurbulence baseFrequency='0.7'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.85 0'/></filter><rect width='100' height='100' filter='url(%23n)'/></svg>");
+    mask-size: 110px;
+  }
+  .stamp.show { animation: slam .45s cubic-bezier(.2,1.6,.4,1) forwards; }
+  @keyframes slam { 0% { opacity: 0; transform: rotate(-9deg) scale(2.1); } 100% { opacity: 1; transform: rotate(-9deg) scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .stamp.show { animation: none; opacity: 1; } }
+
+  /* ---------- After-download checklist ---------- */
+  #afterbox { display: none; }
+  #afterbox ol { padding-left: 22px; line-height: 1.85; font-size: 14.5px; }
+  #afterbox li::marker { font-family: var(--mono); font-weight: 600; color: var(--accent); }
+  #afterbox code { font-family: var(--mono); font-size: 12.5px; background: var(--paper); padding: 1px 5px; border-radius: 3px; }
+
+  footer { margin-top: 36px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft); line-height: 1.7; }
+
+  /* ---------- Licensing ---------- */
+  .tier-pill {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 3px; border: 1.5px solid var(--line); color: var(--ink-soft);
+  }
+  .tier-pill.full { border-color: var(--stamp); color: var(--stamp); font-weight: 600; }
+  .link-btn {
+    background: none; border: none; cursor: pointer; font-family: var(--mono);
+    font-size: 12px; color: var(--accent); text-decoration: underline; padding: 0;
+  }
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(20,33,61,0.55);
+    z-index: 50; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--card); border-radius: 8px; max-width: 460px; width: 100%;
+    padding: 28px; border-top: 4px solid var(--accent);
+  }
+  .modal h3 { font-family: var(--display); font-size: 19px; margin-bottom: 8px; }
+  .modal p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.55; margin-bottom: 14px; }
+  .modal .limits { font-family: var(--mono); font-size: 12.5px; background: var(--paper); border-radius: 4px; padding: 10px 14px; margin-bottom: 16px; line-height: 1.8; }
+  .key-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .key-row input {
+    flex: 1; font-family: var(--mono); font-size: 13px; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 4px; color: var(--ink);
+  }
+  .key-row input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .btn.secondary { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); padding: 10px 18px; font-size: 13.5px; }
+  .btn.secondary:hover { background: var(--ink); color: #fff; }
+  .btn.buy { width: 100%; margin-bottom: 14px; }
+  .lic-status { font-family: var(--mono); font-size: 12.5px; min-height: 18px; margin-bottom: 6px; }
+  .lic-status.ok { color: var(--stamp); }
+  .lic-status.err { color: #B02A1B; }
+  .modal-close { float: right; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--ink-soft); line-height: 1; }
+  .divider-label { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.1em; margin: 14px 0 10px; }
+  .divider-label::before, .divider-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  @media (max-width: 560px) {
+    .group-row { flex-wrap: wrap; }
+    .convo-list { padding-left: 24px; }
+    .stamp { position: static; display: inline-block; margin-bottom: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Migration Manifest · No. 001</div>
+    <h1>ChatGPT <span class="arrow">→</span> Claude<br>Migration Kit</h1>
+    <p class="sub">Unpack your ChatGPT data export, sort conversations by project, and repack everything as clean Markdown — structured and ready to drop into Claude Projects.</p>
+    <div class="privacy-tag"><span class="dot"></span>100% LOCAL — YOUR DATA NEVER LEAVES THIS BROWSER</div>
+  </header>
+
+  <div class="rail" aria-hidden="true">
+    <span id="rail1" class="on">1 · Load export</span>
+    <span id="rail2">2 · Review manifest</span>
+    <span id="rail3">3 · Pack for Claude</span>
+  </div>
+
+  <!-- STEP 1 -->
+  <section class="card" id="loadCard">
+    <h2>Load your ChatGPT export</h2>
+    <p class="hint">Drop the export <strong>.zip</strong> you received by email, or just the <strong>conversations.json</strong> from inside it. Parsing happens entirely on this device.</p>
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose or drop your ChatGPT export file">
+      <div class="big">Drop file here, or click to browse</div>
+      <div class="small">accepts .zip · conversations.json</div>
+    </div>
+    <input type="file" id="fileInput" accept=".zip,.json,application/zip,application/json">
+    <div class="howto">
+      Don't have an export yet? In ChatGPT: <code>Settings → Data Controls → Export Data</code>. The download link arrives by email (can take up to 24 hours). For very large exports (500&nbsp;MB+), extract the zip on your computer first and load only <code>conversations.json</code> here — it's lighter on memory.
+    </div>
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="card" id="manifest">
+    <div class="stamp" id="stamp">★ Cleared<br>for import</div>
+    <div class="manifest-head">
+      <h2>Cargo manifest</h2>
+      <div class="manifest-meta" id="manifestMeta"></div>
+    </div>
+    <p class="hint" style="margin-top:10px;">Project names aren't included in ChatGPT's export — only opaque IDs — so groups detected as Projects get placeholder names. <strong>Click any name to rename it.</strong> Untick anything you don't want to bring along; most people migrate a fraction of their history.</p>
+    <div id="groups"></div>
+
+    <div class="options">
+      <div class="opt">
+        <div class="opt-label">Output format</div>
+        <label><input type="radio" name="fmt" value="merged" checked> One merged .md per project <span style="color:var(--ink-soft)">(recommended for Claude knowledge)</span></label>
+        <label><input type="radio" name="fmt" value="individual"> One .md file per conversation</label>
+      </div>
+      <div class="opt">
+        <div class="opt-label">Details</div>
+        <label><input type="checkbox" id="optDates" checked> Include conversation dates</label>
+        <label><input type="checkbox" id="optCI" checked> Extract custom instructions (if found)</label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="packBtn">Pack &amp; download .zip</button>
+      <span class="selection-note" id="selNote"></span>
+      <span class="tier-pill" id="tierPill">Free tier</span>
+      <button class="link-btn" id="unlockLink">Unlock full version</button>
+    </div>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="card" id="afterbox">
+    <h2>Last mile — into Claude</h2>
+    <p class="hint">Your zip contains one folder per project, plus a README with these same steps.</p>
+    <ol>
+      <li>Unzip the download on your computer.</li>
+      <li>In Claude, click <code>Projects → Create project</code> and name it after a folder.</li>
+      <li>Open the folder and drag its <code>.md</code> files into the project's <strong>knowledge</strong> panel.</li>
+      <li>If the folder contains <code>_custom-instructions.md</code>, paste its contents into the project's <strong>Set instructions</strong> field.</li>
+      <li>Repeat per project. Start a chat and ask Claude to confirm what context it has.</li>
+    </ol>
+  </section>
+
+  <!-- License modal -->
+  <div class="modal-backdrop" id="licModal" role="dialog" aria-modal="true" aria-labelledby="licTitle">
+    <div class="modal">
+      <button class="modal-close" id="licClose" aria-label="Close">×</button>
+      <h3 id="licTitle">Unlock the full version</h3>
+      <p id="licIntro">The free tier covers a taste of the migration. The full version removes all limits — one payment, yours forever.</p>
+      <div class="limits" id="licLimits">
+        FREE — 20 conversations · 1 project<br>
+        FULL — unlimited conversations · unlimited projects · custom-instruction extraction
+      </div>
+      <a class="btn buy" id="buyBtn" href="#" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;">Buy license — $9 one-time</a>
+      <div class="divider-label">Already have a key?</div>
+      <div class="key-row">
+        <input type="text" id="licKey" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" aria-label="License key">
+        <button class="btn secondary" id="licVerify">Activate</button>
+      </div>
+      <div class="lic-status" id="licStatus"></div>
+    </div>
+  </div>
+
+  <footer>
+    BUILT FOR THE ONE-WAY TRIP · Works offline once loaded · Nothing is uploaded, logged, or stored — refresh the page and it's gone.<br>
+    Reads the standard ChatGPT data-export format (conversation node graph). Custom GPT &amp; Project groupings are detected from gizmo IDs (<code>g-p-…</code> = Project).
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ================= LICENSE CONFIG — EDIT BEFORE LAUNCH =================
+     1. Create your product on Gumroad or Lemon Squeezy with license keys ON.
+     2. Set PROVIDER and the matching IDs below.
+     3. Set BUY_URL to your product page.
+     PROVIDER options:
+       'gumroad'      → needs GUMROAD_PRODUCT_ID (product permalink/ID)
+       'lemonsqueezy' → needs nothing extra; LS validates by key alone
+       'none'         → everything unlocked (use while testing / free launch)
+  ======================================================================== */
+  const LICENSE = {
+    PROVIDER: 'none',
+    BUY_URL: 'https://YOURSTORE.gumroad.com/l/your-product',
+    GUMROAD_PRODUCT_ID: 'YOUR_GUMROAD_PRODUCT_ID',
+    FREE_MAX_CONVOS: 20,
+    FREE_MAX_PROJECTS: 1
+  };
+
+  /* ---------------- License state ---------------- */
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  let licensed = LICENSE.PROVIDER === 'none' || store.get('mk_license_ok') === '1';
+
+  async function verifyKey(key) {
+    key = key.trim();
+    if (!key) throw new Error('Enter a license key.');
+    if (LICENSE.PROVIDER === 'gumroad') {
+      const res = await fetch('https://api.gumroad.com/v2/licenses/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ product_id: LICENSE.GUMROAD_PRODUCT_ID, license_key: key, increment_uses_count: 'true' })
+      });
+      const j = await res.json();
+      if (!j.success) throw new Error(j.message || 'Key not recognized.');
+      if (j.purchase && (j.purchase.refunded || j.purchase.chargebacked)) throw new Error('This key belongs to a refunded purchase.');
+      return true;
+    }
+    if (LICENSE.PROVIDER === 'lemonsqueezy') {
+      const res = await fetch('https://api.lemonsqueezy.com/v1/licenses/validate', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ license_key: key })
+      });
+      const j = await res.json();
+      if (!j.valid) throw new Error(j.error || 'Key not recognized.');
+      return true;
+    }
+    return true; // PROVIDER 'none'
+  }
+
+  /* ---------------- State ---------------- */
+  let groups = [];          // [{id, name, kind:'project'|'gpt'|'loose', convos:[{title,date,md,checked}], checked}]
+  let customInstructions = null; // latest user_editable_context found
+  const $ = (id) => document.getElementById(id);
+
+  /* ---------------- File intake ---------------- */
+  const dz = $('dropzone'), fi = $('fileInput'), status = $('status');
+
+  dz.addEventListener('click', () => fi.click());
+  dz.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fi.click(); } });
+  ['dragover','dragenter'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drag'); }));
+  dz.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) intake(f); });
+  fi.addEventListener('change', () => { if (fi.files[0]) intake(fi.files[0]); });
+
+  function setStatus(msg, cls) { status.textContent = msg; status.className = 'status ' + cls; }
+
+  async function intake(file) {
+    try {
+      setStatus('Reading ' + file.name + ' …', 'busy');
+      let jsonText;
+      if (/\.zip$/i.test(file.name) || file.type.includes('zip')) {
+        const zip = await JSZip.loadAsync(file);
+        // find conversations.json anywhere in the archive
+        const entry = Object.values(zip.files).find(f => !f.dir && /(^|\/)conversations\.json$/i.test(f.name));
+        if (!entry) throw new Error('No conversations.json found inside this zip. Is it the ChatGPT data export?');
+        setStatus('Extracting conversations.json …', 'busy');
+        jsonText = await entry.async('string');
+      } else {
+        jsonText = await file.text();
+      }
+      setStatus('Parsing conversations …', 'busy');
+      // brief yield so the status paints before a heavy parse
+      await new Promise(r => setTimeout(r, 30));
+      const data = JSON.parse(jsonText);
+      const convos = Array.isArray(data) ? data : (Array.isArray(data.conversations) ? data.conversations : null);
+      if (!convos) throw new Error('Unrecognized JSON shape — expected an array of conversations.');
+      buildGroups(convos);
+      setStatus('Parsed ' + convos.length + ' conversations.', 'ok');
+      renderManifest();
+    } catch (err) {
+      console.error(err);
+      setStatus('✕ ' + (err.message || 'Could not read this file.'), 'err');
+    }
+  }
+
+  /* ---------------- ChatGPT format parsing ---------------- */
+
+  // Walk the node graph from current_node back to root → ordered messages.
+  function extractMessages(convo) {
+    const mapping = convo.mapping || {};
+    let nodeId = convo.current_node;
+    // fallback: find a leaf if current_node missing
+    if (!nodeId || !mapping[nodeId]) {
+      const ids = Object.keys(mapping);
+      const hasChild = new Set();
+      ids.forEach(id => (mapping[id].children || []).forEach(c => hasChild.add(c)));
+      nodeId = ids.find(id => (mapping[id].children || []).length === 0) || ids[ids.length - 1];
+    }
+    const chain = [];
+    let guard = 0;
+    while (nodeId && mapping[nodeId] && guard++ < 100000) {
+      chain.push(mapping[nodeId]);
+      nodeId = mapping[nodeId].parent;
+    }
+    chain.reverse();
+
+    const out = [];
+    for (const node of chain) {
+      const m = node.message;
+      if (!m || !m.author) continue;
+      const role = m.author.role;
+      const meta = m.metadata || {};
+      const c = m.content || {};
+
+      // capture custom instructions
+      if (c.content_type === 'user_editable_context') {
+        customInstructions = {
+          profile: c.user_profile || '',
+          instructions: c.user_instructions || ''
+        };
+        continue;
+      }
+      if (role !== 'user' && role !== 'assistant') continue;
+      if (meta.is_visually_hidden_from_conversation) continue;
+
+      let text = '';
+      if (c.content_type === 'text' && Array.isArray(c.parts)) {
+        text = c.parts.filter(p => typeof p === 'string').join('\n');
+      } else if (c.content_type === 'code') {
+        text = '```' + (c.language && c.language !== 'unknown' ? c.language : '') + '\n' + (c.text || '') + '\n```';
+      } else if (c.content_type === 'multimodal_text' && Array.isArray(c.parts)) {
+        text = c.parts.map(p => typeof p === 'string' ? p : '*[image]*').join('\n');
+      } else if (c.content_type === 'thoughts' || c.content_type === 'reasoning_recap' || c.content_type === 'model_editable_context') {
+        continue; // internal reasoning artifacts — skip
+      } else if (typeof c.text === 'string') {
+        text = c.text;
+      }
+      text = (text || '').trim();
+      if (!text) continue;
+      out.push({ role, text });
+    }
+    return out;
+  }
+
+  function convoToMarkdown(convo, includeDate) {
+    const msgs = extractMessages(convo);
+    if (!msgs.length) return null;
+    const title = (convo.title || 'Untitled conversation').trim();
+    let md = '# ' + title + '\n';
+    if (includeDate && convo.create_time) {
+      md += '*' + new Date(convo.create_time * 1000).toISOString().slice(0, 10) + '*\n';
+    }
+    md += '\n';
+    for (const m of msgs) {
+      md += '## ' + (m.role === 'user' ? 'User' : 'Assistant') + '\n\n' + m.text + '\n\n';
+    }
+    return md;
+  }
+
+  /* ---------------- Grouping ---------------- */
+  function buildGroups(convos) {
+    const map = new Map();
+    let projN = 0, gptN = 0;
+    for (const c of convos) {
+      const gid = c.gizmo_id || c.conversation_template_id || null;
+      let key, kind;
+      if (gid && /^g-p-/.test(gid)) { key = gid; kind = 'project'; }
+      else if (gid && /^g-/.test(gid)) { key = gid; kind = 'gpt'; }
+      else { key = '__loose__'; kind = 'loose'; }
+
+      if (!map.has(key)) {
+        let name;
+        if (kind === 'project') name = 'Project ' + (++projN);
+        else if (kind === 'gpt') name = 'Custom GPT ' + (++gptN);
+        else name = 'Ungrouped conversations';
+        map.set(key, { id: key, name, kind, convos: [], checked: kind !== 'loose' });
+      }
+      map.get(key).convos.push({
+        title: (c.title || 'Untitled').trim(),
+        ts: c.create_time || 0,
+        raw: c,
+        checked: kind !== 'loose'
+      });
+    }
+    groups = [...map.values()];
+    // projects first, then GPTs, then loose; newest activity first within
+    const rank = { project: 0, gpt: 1, loose: 2 };
+    groups.sort((a, b) => rank[a.kind] - rank[b.kind]);
+    groups.forEach(g => g.convos.sort((a, b) => b.ts - a.ts));
+  }
+
+  /* ---------------- Render ---------------- */
+  function renderManifest() {
+    $('manifest').style.display = 'block';
+    $('rail1').classList.remove('on'); $('rail2').classList.add('on');
+    const total = groups.reduce((n, g) => n + g.convos.length, 0);
+    const nProj = groups.filter(g => g.kind === 'project').length;
+    $('manifestMeta').textContent = total + ' conversations · ' + nProj + ' project' + (nProj === 1 ? '' : 's') + ' detected';
+
+    const wrap = $('groups');
+    wrap.innerHTML = '';
+    groups.forEach((g, gi) => {
+      const div = document.createElement('div');
+      div.className = 'group';
+
+      const row = document.createElement('div');
+      row.className = 'group-row';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = g.checked;
+      cb.setAttribute('aria-label', 'Include ' + g.name);
+      cb.addEventListener('change', () => {
+        g.checked = cb.checked;
+        g.convos.forEach(c => c.checked = cb.checked);
+        div.querySelectorAll('.convo-row input').forEach(i => i.checked = cb.checked);
+        updateNote();
+      });
+
+      const name = document.createElement('input');
+      name.className = 'group-name'; name.value = g.name; name.spellcheck = false;
+      name.setAttribute('aria-label', 'Rename group');
+      name.addEventListener('input', () => { g.name = name.value || 'Untitled project'; });
+
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + (g.kind === 'project' ? 'proj' : g.kind === 'gpt' ? 'gpt' : '');
+      badge.textContent = g.kind === 'project' ? 'Project' : g.kind === 'gpt' ? 'Custom GPT' : 'Loose';
+
+      const count = document.createElement('span');
+      count.className = 'count'; count.textContent = g.convos.length + ' conv.';
+
+      const ex = document.createElement('button');
+      ex.className = 'expand-btn'; ex.textContent = 'View';
+      ex.setAttribute('aria-expanded', 'false');
+
+      row.append(cb, name, badge, count, ex);
+      div.appendChild(row);
+
+      const list = document.createElement('div');
+      list.className = 'convo-list';
+      g.convos.forEach(c => {
+        const cr = document.createElement('div');
+        cr.className = 'convo-row';
+        const ccb = document.createElement('input');
+        ccb.type = 'checkbox'; ccb.checked = c.checked;
+        ccb.addEventListener('change', () => {
+          c.checked = ccb.checked;
+          g.checked = g.convos.some(x => x.checked);
+          cb.checked = g.checked;
+          updateNote();
+        });
+        const t = document.createElement('span');
+        t.className = 'convo-title'; t.textContent = c.title; t.title = c.title;
+        const d = document.createElement('span');
+        d.className = 'convo-date';
+        d.textContent = c.ts ? new Date(c.ts * 1000).toISOString().slice(0, 10) : '';
+        cr.append(ccb, t, d);
+        list.appendChild(cr);
+      });
+      div.appendChild(list);
+
+      ex.addEventListener('click', () => {
+        const open = list.classList.toggle('open');
+        ex.textContent = open ? 'Hide' : 'View';
+        ex.setAttribute('aria-expanded', String(open));
+      });
+
+      wrap.appendChild(div);
+    });
+    updateNote();
+    $('manifest').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function selectionStats() {
+    const sel = groups.reduce((n, g) => n + g.convos.filter(c => c.checked).length, 0);
+    const selGroups = groups.filter(g => g.convos.some(c => c.checked)).length;
+    return { sel, selGroups };
+  }
+
+  function overFreeLimit() {
+    if (licensed) return false;
+    const { sel, selGroups } = selectionStats();
+    return sel > LICENSE.FREE_MAX_CONVOS || selGroups > LICENSE.FREE_MAX_PROJECTS;
+  }
+
+  function updateNote() {
+    const { sel, selGroups } = selectionStats();
+    let note = sel + ' conversation' + (sel === 1 ? '' : 's') + ' selected';
+    if (!licensed && LICENSE.PROVIDER !== 'none') {
+      note += ' · free tier: ' + LICENSE.FREE_MAX_CONVOS + ' conv / ' + LICENSE.FREE_MAX_PROJECTS + ' project max';
+      if (overFreeLimit()) note += ' — over limit';
+    }
+    $('selNote').textContent = note;
+    $('packBtn').disabled = sel === 0;
+  }
+
+  /* ---------------- License UI ---------------- */
+  function refreshTierUI() {
+    const pill = $('tierPill'), link = $('unlockLink');
+    if (LICENSE.PROVIDER === 'none') { pill.style.display = 'none'; link.style.display = 'none'; return; }
+    pill.style.display = ''; link.style.display = licensed ? 'none' : '';
+    pill.textContent = licensed ? '✓ Full version' : 'Free tier';
+    pill.classList.toggle('full', licensed);
+  }
+  function openLicModal(reason) {
+    $('licIntro').textContent = reason || 'The free tier covers a taste of the migration. The full version removes all limits — one payment, yours forever.';
+    $('buyBtn').href = LICENSE.BUY_URL;
+    $('licStatus').textContent = ''; $('licStatus').className = 'lic-status';
+    $('licModal').classList.add('open');
+    $('licKey').focus();
+  }
+  $('unlockLink').addEventListener('click', () => openLicModal());
+  $('licClose').addEventListener('click', () => $('licModal').classList.remove('open'));
+  $('licModal').addEventListener('click', (e) => { if (e.target === $('licModal')) $('licModal').classList.remove('open'); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('licModal').classList.remove('open'); });
+  $('licKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('licVerify').click(); });
+  $('licVerify').addEventListener('click', async () => {
+    const st = $('licStatus');
+    st.className = 'lic-status'; st.textContent = 'Checking key…';
+    $('licVerify').disabled = true;
+    try {
+      await verifyKey($('licKey').value);
+      licensed = true;
+      store.set('mk_license_ok', '1');
+      st.className = 'lic-status ok'; st.textContent = '✓ Activated. All limits removed.';
+      refreshTierUI(); updateNote();
+      setTimeout(() => $('licModal').classList.remove('open'), 900);
+    } catch (err) {
+      st.className = 'lic-status err'; st.textContent = '✕ ' + err.message;
+    } finally {
+      $('licVerify').disabled = false;
+    }
+  });
+  refreshTierUI();
+
+  /* ---------------- Packing ---------------- */
+  const sanitize = (s) => s.replace(/[\\/:*?"<>|#%&{}]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'untitled';
+  const MAX_PART = 700 * 1024; // ~700 KB per merged part keeps files comfortable for Claude knowledge
+
+  $('packBtn').addEventListener('click', async () => {
+    if (overFreeLimit()) {
+      const { sel, selGroups } = selectionStats();
+      openLicModal('You selected ' + sel + ' conversations across ' + selGroups + ' projects. The free tier packs up to ' +
+        LICENSE.FREE_MAX_CONVOS + ' conversations from 1 project — unlock the full version, or trim your selection.');
+      return;
+    }
+    const btn = $('packBtn');
+    btn.disabled = true; btn.textContent = 'Packing…';
+    try {
+      const merged = document.querySelector('input[name=fmt]:checked').value === 'merged';
+      const withDates = $('optDates').checked;
+      const withCI = $('optCI').checked && (licensed || LICENSE.PROVIDER === 'none');
+
+      const zip = new JSZip();
+      const root = zip.folder('claude-migration');
+      root.file('README-IMPORT-INSTRUCTIONS.md', readme());
+
+      if (withCI && customInstructions && (customInstructions.profile || customInstructions.instructions)) {
+        root.file('_custom-instructions.md',
+          '# Custom instructions carried over from ChatGPT\n\n' +
+          'Paste the relevant parts into each Claude Project\'s **Set instructions** field, or into your Claude user preferences.\n\n' +
+          (customInstructions.profile ? '## About the user\n\n' + customInstructions.profile + '\n\n' : '') +
+          (customInstructions.instructions ? '## How the assistant should respond\n\n' + customInstructions.instructions + '\n' : ''));
+      }
+
+      const usedNames = new Set();
+      for (const g of groups) {
+        const selected = g.convos.filter(c => c.checked);
+        if (!selected.length) continue;
+        let fname = sanitize(g.name);
+        while (usedNames.has(fname)) fname += '_';
+        usedNames.add(fname);
+        const folder = root.folder(fname);
+
+        if (merged) {
+          let part = 1, buf = '';
+          const flush = () => { if (buf) { folder.file('conversations-part-' + part + '.md', buf); part++; buf = ''; } };
+          for (const c of selected) {
+            const md = convoToMarkdown(c.raw, withDates);
+            if (!md) continue;
+            if (buf && (buf.length + md.length) > MAX_PART) flush();
+            buf += md + '\n---\n\n';
+          }
+          flush();
+        } else {
+          const seen = new Set();
+          for (const c of selected) {
+            const md = convoToMarkdown(c.raw, withDates);
+            if (!md) continue;
+            let n = sanitize(c.title);
+            while (seen.has(n)) n += '_';
+            seen.add(n);
+            folder.file(n + '.md', md);
+          }
+        }
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'claude-migration.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+
+      $('stamp').classList.add('show');
+      $('afterbox').style.display = 'block';
+      $('rail3').classList.add('on');
+      $('afterbox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+      console.error(err);
+      alert('Packing failed: ' + err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Pack & download .zip';
+      updateNote();
+    }
+  });
+
+  function readme() {
+    return [
+      '# Importing this into Claude',
+      '',
+      'This archive was packed locally by the ChatGPT → Claude Migration Kit. One folder = one Claude Project.',
+      '',
+      '## Steps',
+      '',
+      '1. In Claude (claude.ai), go to **Projects → Create project**. Name it after one of the folders here.',
+      '2. Open that folder and drag its `.md` files into the project\'s **knowledge** panel.',
+      '3. If `_custom-instructions.md` exists at the top level, paste the relevant parts into the project\'s **Set instructions** field.',
+      '4. Repeat for each folder.',
+      '5. In a new project chat, ask Claude: "Summarize the context you have in this project\'s knowledge" to verify the import.',
+      '',
+      '## Notes',
+      '',
+      '- Merged files are split into ~700 KB parts so they sit comfortably in project knowledge.',
+      '- Conversations are formatted as `## User` / `## Assistant` turns under each conversation title.',
+      '- Images and file attachments from ChatGPT are not included in its export\'s conversation data; re-upload any important files manually.',
+      ''
+    ].join('\n');
+  }
+})();
+</script>
+</body>
+</html>
