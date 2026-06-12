@@ -87,16 +87,38 @@ its parsing logic was preserved verbatim during the port.
 - [x] Privacy guarantee verified — no conversation content in any network
       request during a full pack+download flow.
 
-## Backlog (phase 2)
-- [P0] /admin dashboard — total users, free vs paid counts, revenue events,
-       signups over time (charts via recharts). Restricted to is_admin=true.
-- [P0] Transactional email via Resend — email verification reminder banner +
-       send link, password reset, purchase confirmation/receipt.
-       Env: `RESEND_API_KEY`, `FROM_EMAIL`.
-- [P1] Email verification banner inside the app shell.
+## Backlog (phase 3+)
+- [P1] Fire-and-forget the verification email at signup (asyncio.create_task) so
+       a slow Resend call cannot stall the signup endpoint.
+- [P1] Friendly disclaimer on /forgot-password for Google-auth accounts
+       (no password to reset).
+- [P1] Migrate `users.created_at` to a real BSON Date and switch the 30-day
+       chart query to a typed comparison.
 - [P1] CSP headers to make the no-upload promise auditable.
 - [P1] Rate limiting on auth + webhook endpoints (slowapi).
-- [P1] HTTP-only cookie option for JWT (currently localStorage).
+- [P1] Add data-testid to all KPI cards + admin chart for richer e2e.
 - [P2] Refund auto-downgrade tested end-to-end with a real refund event.
 - [P2] Stripe customer portal link in /account for invoice/receipt.
+- [P2] Verify a custom domain in Resend (so emails reach all users, not just
+       the API-key owner).
 - [P2] Marketing copy A/B; analytics events for upgrade conversion.
+
+## What's implemented (2026-02 — phase 2)
+- [x] Email verification flow: `_issue_verification_email()` triggers on signup,
+      writes a 72-hour token to `db.email_tokens`. `/verify-email?token=...`
+      consumes it. Reminder banner on /account with one-click resend.
+- [x] Password reset flow: `/forgot-password` (anti-enumeration —
+      always 200 ok), `/reset-password?token=...`. 1-hour token TTL,
+      single-use.
+- [x] Purchase confirmation: `_apply_paid()` sends an emailed receipt via Resend
+      after a Stripe payment lands (idempotent, won't double-send because
+      `_apply_paid` short-circuits when status='paid').
+- [x] Resend integration: `/app/backend/emails.py`. Sandbox sender
+      `Manifest <onboarding@resend.dev>` — emails only reach the API-key owner
+      until a custom domain is verified. `send_email()` never raises.
+- [x] `/admin` dashboard (admin-only via `AdminRoute`): KPI cards (total /
+      free / paid users, total revenue), 30-day signups bar chart with paid
+      conversions in green, recent payments table, paginated users table.
+- [x] Backend admin endpoints: `GET /api/admin/stats`, `GET /api/admin/users`.
+- [x] Test suite: 31/31 pass.
+
